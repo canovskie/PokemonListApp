@@ -1,7 +1,11 @@
+import Combine
 import UIKit
 import SDWebImage
 
 class PokemonDetailViewController: UIViewController {
+    private enum Constants {
+        static let cellReusableIdentifier = "detailCell"
+    }
     
     @IBOutlet weak var pokemonDetailImage: UIImageView!
     @IBOutlet weak var pokemonDetailName: UILabel!
@@ -9,7 +13,7 @@ class PokemonDetailViewController: UIViewController {
     @IBOutlet weak var goBackButton: UIButton!
     
     private var viewModel = PokemonDetailViewModel()
-    
+    private var bag = Set<AnyCancellable>()
     
     var selectedPokemon: Pokemon? {
         didSet {
@@ -30,14 +34,33 @@ class PokemonDetailViewController: UIViewController {
         }
         
         getData()
+        addBinders()
+    }
+    
+    private func addBinders() {
+        viewModel.$errorMessage.sink { [weak self] message in
+            guard let message = message else {
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self?.showErrorAlert(message: message)
+            }
+        }.store(in: &bag)
+        
+        viewModel.$abilityDetails.sink { [weak self] details in
+            DispatchQueue.main.async {
+                self?.pokemonDetailList.reloadData()
+            }
+        }.store(in: &bag)
     }
     
     @IBAction func goToMain(_ sender: Any) {
         if let navigationController = navigationController {
-                navigationController.popViewController(animated: true)
-            } else {
-                dismiss(animated: true, completion: nil)
-            }
+            navigationController.popViewController(animated: true)
+        } else {
+            dismiss(animated: true, completion: nil)
+        }
     }
     
     func getData() {
@@ -48,10 +71,8 @@ class PokemonDetailViewController: UIViewController {
                 DispatchQueue.main.async {
                     self.pokemonDetailList.reloadData()
                 }
-            case .failure(let error):
-                DispatchQueue.main.async {
-                    self.showErrorAlert(message: error.localizedDescription)
-                }
+            case .failure:
+                break
             }
         }
     }
@@ -70,7 +91,7 @@ extension PokemonDetailViewController: UITableViewDataSource, UITableViewDelegat
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "detailCell", for: indexPath) as! DetailCell
+        let cell = tableView.dequeueReusableCell(withIdentifier: Constants.cellReusableIdentifier, for: indexPath) as! DetailCell
         cell.configure(abilityDetails: viewModel.abilityDetails[indexPath.row])
         return cell
     }
